@@ -15,11 +15,11 @@ def test_map():
     my_map_img.show()
     
 def test_game():
-    simulator.play_game(['Mike', 'Katie', 'Dan'])
+    pass
     
     
 def main():
-    test_game()
+    test_map()
     #sprite = generate_settlement_sprite(200, 200, (125, 40, 208))
     #sprite.show()
     
