@@ -89,6 +89,13 @@ def generate_city_sprite(width, height, color):
         (width, height/2),
         (width, height)
     ]
+
+    city_sprite = Image.new('RGBA', (width, height))
+    draw = ImageDraw.Draw(city_sprite)
+    draw.polygon(points, fill=color, outline=(0, 0, 0))
+    del draw
+    return city_sprite
+    
     
 def render_game(game_state):
     board = game_state.game_board
