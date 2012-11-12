@@ -91,7 +91,7 @@ vmap = {
     
 
 def _get_neighbor_coords(x,y):
-    return filter(lambda neighbor_tile: neighbor_tile in resource_tile_coords, [ (x+dx, y+dy) for dx,dy in neighbor_coords ])
+    return [ (x+dx, y+dy) for dx,dy in neighbor_coords ]
 
 
 def get_tiles_and_vertices(game_board):
@@ -116,7 +116,8 @@ def build_map():
         
     for tx, ty in resource_tile_coords:
         neighbors = _get_neighbor_coords(tx, ty)
-        tile_map[tx][ty].set_neighbors([tile_map[nx][ny] for nx, ny in neighbors])
+        print 'for hex tile %d, %d neighbors are [%s]' % (tx, ty, ', '.join([str(nb) for nb in neighbors ]))
+        tile_map[tx][ty].set_neighbors([tile_map[nx][ny] if ny in tile_map[nx] else None for nx, ny in neighbors])
             
         
     tiles = reduce(lambda x, y: x + y, [ tile_map[tx].values() for tx in tile_map.keys() ])
@@ -130,7 +131,7 @@ def build_map():
             buddies = vmap[vertex]
             final_list = [ (getattr(tile, n_name), v_name) for  n_name, v_name in buddies ]
             final_list.append((tile, vertex))
-            a, b, c = sorted_vertex_tiles = [ t[0] for t in sorted( final_list, key=lambda x: x[1] ) ]
+            a, b, c = sorted_vertex_tiles = [ t[0] for t in sorted( final_list, key=lambda x: id(x) ) ]
             actual_vertex = vertex_memo[a][b][c]
             actual_vertex.set_tiles(sorted_vertex_tiles)
             vertices.append(actual_vertex)

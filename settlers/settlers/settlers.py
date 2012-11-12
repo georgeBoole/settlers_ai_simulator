@@ -211,8 +211,8 @@ class Game(object):
                 location = placing_player.brain.choose_initial_placement(model.SETTLEMENT, self)
             report('%s is placing a settlement at location %s' % (placing_player.name, location))
             placing_player.build_structure(model.SETTLEMENT, location)
-            
             # place road
+            #print 'neighbors of location %d' % len(location.neighbors)
             road_location = placing_player.brain.choose_initial_placement(model.ROAD, self, choice_set=([ (location, ln) for ln in location.neighbors ]))
             placing_player.build_structure(model.ROAD, road_location)
             

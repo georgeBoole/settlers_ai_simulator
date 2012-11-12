@@ -10,6 +10,9 @@ tile_img_map = dict(zip(model.TILE_TYPES, tile_images))
 
 board_font = ImageFont.truetype(os.path.join(IMG_DIR, 'roboto', 'Roboto-Black.ttf'), 60)
 
+def pil_color(color):
+    return tuple([ int(c * 255.0) for c in color ])
+
 def vertex_locations(tile_width, tile_height):
     return [
         (tile_width / 4, 0),
@@ -35,7 +38,7 @@ def draw_production(tile_image, production_number):
     del draw
     return new_image
 
-def get_map_image(tile_map, sprite_structures=None):
+def get_map_image(tile_map, sprite_structures=None, roads=None):
     
     tw, th = tile_images[0].size
     #print tile_images[0].size
@@ -43,6 +46,10 @@ def get_map_image(tile_map, sprite_structures=None):
     vertex_sprite_map = dict([ (structure.location, sprite) for sprite, structure in sprite_structures ])
     
     vert_sprite_draws = list()
+    
+    all_road_vertices = list(set(reduce(lambda a,b: a + b, [ location for location, color in roads ])))
+    COORD_UNKNOWN = (-1, -1)
+    road_vertex_coords = dict(zip(all_road_vertices, [COORD_UNKNOWN] * len(all_road_vertices)))
     
     tile_screen_coords = list()
     
@@ -61,6 +68,14 @@ def get_map_image(tile_map, sprite_structures=None):
                         vdx, vdy = vertex_locs[vidx]
                         sprite = vertex_sprite_map[v]
                         vert_sprite_draws.append((sprite, (int(sx + vdx - (sprite.size[0]/2)), int(sy + vdy - (sprite.size[1]/2)))))
+            if roads:
+                for vidx, v in enumerate(tile.vertices):
+                    if v in road_vertex_coords:
+                        vdx, vdy = vertex_locs[vidx]
+                        vloc = int(sx+vdx), int(sy+vdy)
+                        road_vertex_coords[v] = vloc
+                    
+            
             
     x_coords = [ s_coord[0] for s_coord, tile in tile_screen_coords ]
     y_coords = [ s_coord[1] for s_coord, tile in tile_screen_coords ]
@@ -76,10 +91,17 @@ def get_map_image(tile_map, sprite_structures=None):
     for screen_coord, tile_img in tile_screen_coords:
         map_img.paste(tile_img, screen_coord, tile_img)
         
+    draw = ImageDraw.Draw(map_img)
+    
+    for rd in roads:
+        line_points = [ tuple([int(rvc) for rvc in road_vertex_coords[loc]]) for loc in rd[0] ]
+        print line_points
+        draw.line(line_points, fill=pil_color(rd[1]), width=8)
+    
+    del draw
+    
     for sprite_img, screen_loc in vert_sprite_draws:
         map_img.paste(sprite_img, screen_loc, sprite_img)
-        
-    
     
     screenshot = Image.new('RGBA', (int(map_img_size[0] * 1.3), int(map_img_size[1] * 1.3)))
     background_image = Image.open(os.path.join(IMG_DIR, 'background.png')).resize(screenshot.size)
@@ -95,9 +117,7 @@ def build_sprite(size, mask, color):
     
     if mask.size != isize:
         mask = mask.resize(isize)
-        
-    pil_color = tuple([ int(c * 255.0) for c in color ])
-    color_img = Image.new('RGBA', isize, pil_color)
+    color_img = Image.new('RGBA', isize, pil_color(color))
     dst_img = Image.new('RGBA', isize)
     dst_img.paste(color_img, (0,0), mask)
     return dst_img
@@ -114,14 +134,20 @@ def render_game(game_state):
     settlement_size, city_size = [ tuple([SCALE_FACTORS[stype] * BASE_STRUCTURE_SIZE] * 2) for stype in [model.SETTLEMENT, model.CITY] ]
     
     sprite_structure_pairs = list()
+    roads = list()
     for player, color in zip(game_state.players, colors):
+        print '%s is going to be the color %s this game' % (player.name, str(color))
         set_sprite, city_sprite = build_sprite(settlement_size, settlement_mask, color), build_sprite(city_size, city_mask, color)
         on_board_structures = filter(lambda struct: struct.on_board, player.cities + player.settlements)
+        on_board_roads = filter(lambda road: road.on_board, player.roads)
+        print '%s has %d structures and %d roads' % (player.name, len(on_board_structures), len(on_board_roads))
         for obs in on_board_structures:
             sprite_structure_pairs.append( (set_sprite if obs.type == model.SETTLEMENT else city_sprite, obs))
+        for obr in on_board_roads:
+            roads.append((obr.location, color))
     
     
-    board_image = get_map_image(board, sprite_structure_pairs)
+    board_image = get_map_image(board, sprite_structure_pairs, roads)
     
     return board_image
         

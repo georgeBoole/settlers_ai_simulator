@@ -27,12 +27,25 @@ def test_game():
     game_screenshot = draw_game.render_game(game)
     game_screenshot.show()
     
+    road_problems = list()
     for p in players:
         active_settlements = filter(lambda x: x.on_board, p.settlements)
-        print '%s has %d active settlements' % (p.name, len(active_settlements))
+        #print '%s has %d active settlements' % (p.name, len(active_settlements))
+        for r in filter(lambda x: x.location, p.roads):
+            start, end = r.location
+            if not start in end.neighbors:
+                road_problems.append( (p, r) )
+                
+    return road_problems
+            
+    
     
 def main():
-    test_game()
+    rp = test_game()
+    for p, r in rp:
+        print '%s had problem with %s\n\t%s' % (p.name, str(r), 's_tiles: %s\te_tiles: %s' % ([str(st) for st in r.location[0].tiles], [str(et) for et in r.location[1].tiles]))
+    #for road_problems in [test_game() for idx in xrange(10)]:
+    #    print 'game:\n%s' % '\n'.join( ['%s\t%s' % pr for pr in road_problems ])
     
 if __name__ == '__main__':
     main()
