@@ -7,6 +7,7 @@ tile_images = [ Image.open( os.path.join(IMG_DIR, '%s.png' % tile_type.lower()) 
 
 tile_img_map = dict(zip(model.TILE_TYPES, tile_images))
 
+
 board_font = ImageFont.truetype(os.path.join(IMG_DIR, 'roboto', 'Roboto-Black.ttf'), 60)
 
 def draw_production(tile_image, production_number):
@@ -27,7 +28,7 @@ def draw_production(tile_image, production_number):
 def get_map_image(tile_map):
     
     tw, th = tile_images[0].size
-    print tile_images[0].size
+    #print tile_images[0].size
     
     tile_screen_coords = list()
     
@@ -43,11 +44,13 @@ def get_map_image(tile_map):
     max_x, min_x = max(x_coords), min(x_coords)
     max_y, min_y = max(y_coords), min(y_coords)
     
-    print 'x: %d - %d\ny: %d - %d' % (min_x, max_x, min_y, max_y)
+    #print 'x: %d - %d\ny: %d - %d' % (min_x, max_x, min_y, max_y)
     
     map_img_size = (max_x - min_x + tw, max_y - min_y + th)
     
     map_img = Image.new('RGBA', map_img_size)
+    background_image = Image.open(os.path.join(IMG_DIR, 'background.png')).resize(map_img_size)
+    map_img.paste(background_image, (0,0))
     for screen_coord, tile_img in tile_screen_coords:
         map_img.paste(tile_img, screen_coord, tile_img)
         
