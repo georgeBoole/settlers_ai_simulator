@@ -2,13 +2,20 @@ from game import model, board as gameboard
 import random as rnd
 
 from collections import defaultdict
+
+def report(msg):
+    print msg
         
 class Player(object):
     
     def __init__(self, name, ai_control):
+        report('Creating player object with name %s and ai class %s' % (name, str(ai_control.__class__)))
         self.name = name
+        report('Creating structures for player')
         self.init_structures()
+        report('Initializing card handling for player')
         self.init_cards()
+        report('Setting this players brain to be controlled by AI')
         self.brain = ai_control
         
     def init_structures(self):
@@ -24,7 +31,7 @@ class Player(object):
         self.face_up_development_cards = list()
         
     def add_resources(self, resources):
-        self.hand.append(resources)
+        self.hand.extend(resources)
         
     def remove_resources(self, resources):
         removed_resources = list()
@@ -117,13 +124,24 @@ def _find_longest_road(current_road, remaining_segments):
                 recursive_results.append(current_road + [vertex], filter(lambda rrs: rrs != rem_seg, remaining_segments))
     return max([ len(rec_res) for rec_res in recursive_results ])
 
+def valid_structure_location(vertex):
+    is_valid = not vertex.occupied
+    for nv in vertex.neighbors:
+        if nv.occupied:
+            return False
+    return is_valid
+
 class Game(object):
     
     def __init__(self, players, game_board):
+        report('Creating a Game object')
         self.players = players
         self.tiles, self.vertices = gameboard.get_tiles_and_vertices(game_board)
+        
         self.game_board = game_board
+        report('Creating the bank')
         self.bank = Bank(model.BANK_SIZE)
+        report('Initializing bookkeeping variables')
         self.victory_points = dict(zip(self.players, [0] * len(self.players)))
         self.longest_road = None
         self.largest_army = None
@@ -132,9 +150,13 @@ class Game(object):
         
     def play(self):
         # do initial placement
+        report('Starting game, determining turn order...')
         self.turn_order = sorted(self.players, key=lambda x: roll())
+        report('Turn order is %s' % ','.join([p.name for p in self.turn_order]))
         
+        report('Beginning initial placement')
         self.initial_placement()
+        report('Finished initial placement, beginning game')
         #self.play_game()
         
         
@@ -183,10 +205,13 @@ class Game(object):
         for placing_player in placement_order:
             # place settlement
             location = placing_player.brain.choose_initial_placement(model.SETTLEMENT, self)
-            valid_location = not location.occupied and not reduce(lambda a,b: a or b, [ ln.occupied for ln in location.neighbors)])
-            while not valid_location:
+            #print 'location: %s' % location
+            while not valid_structure_location(location):
+                #report('improper selection')
                 location = placing_player.brain.choose_initial_placement(model.SETTLEMENT, self)
+            report('%s is placing a settlement at location %s' % (placing_player.name, location))
             placing_player.build_structure(model.SETTLEMENT, location)
+            
             # place road
             road_location = placing_player.brain.choose_initial_placement(model.ROAD, self, choice_set=([ (location, ln) for ln in location.neighbors ]))
             placing_player.build_structure(model.ROAD, road_location)
@@ -194,8 +219,8 @@ class Game(object):
             last_placement_location[placing_player] = location
             
         for player, last_location in last_placement_location.iteritems():
-            for tile in filter(lambda x: x.type in model.RESOURCES, last_location.tiles):
-                player.add_resource(self.bank.get_resource(tile.type))
+            for tile in filter(lambda x: x and x.type in model.RESOURCES, last_location.tiles):
+                player.add_resources([self.bank.get_resource(tile.type)])
         
         
 

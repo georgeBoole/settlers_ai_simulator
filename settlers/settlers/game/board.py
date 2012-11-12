@@ -72,6 +72,9 @@ class Vertex(object):
     def set_tiles(self, tiles):
         self.tiles = tiles
         
+    def __str__(self):
+        return 'Vertex %d, occupied: %s' % (id(self), str(self.occupied))
+        
     
 neighbor_coords = [
     (0,-1), (1,-1), (1,0), (0,1), (-1,1), (-1,0)
@@ -91,7 +94,7 @@ def _get_neighbor_coords(x,y):
     return filter(lambda neighbor_tile: neighbor_tile in resource_tile_coords, [ (x+dx, y+dy) for dx,dy in neighbor_coords ])
 
 
-def get_tiles_and_vertices(map):
+def get_tiles_and_vertices(game_board):
     tile_set = reduce(lambda a,b: a + b, [ xvalue.values() for xvalue in game_board.values() ])
     vertex_set = set(reduce(lambda c,d: c + d, [t.vertices for t in tile_set]))
     return tile_set, vertex_set

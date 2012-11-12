@@ -48,17 +48,19 @@ def get_map_image(tile_map, sprite_structures=None):
     
     vertex_locs = vertex_locations(tw, th)
     
+    x_offset, y_offset = 80, 80
     for x_idx, tile_column in tile_map.iteritems():
         for y_idx, tile in tile_column.iteritems():
-            sx = int(tw * x_idx * (0.75))
-            sy = int(th * (0.5*x_idx + y_idx))
+            sx = int(tw * x_idx * (0.75)) + x_offset/2
+            sy = int(th * (0.5*x_idx + y_idx)) + y_offset/2
             tile_image = draw_production(tile_img_map[tile.type], tile.production)
             tile_screen_coords.append( ((sx, sy), tile_image))
             if sprite_structures:
                 for vidx, v in enumerate(tile.vertices):
                     if v in vertex_sprite_map:
                         vdx, vdy = vertex_locs[vidx]
-                        vert_sprite_draws.append(vertex_sprite_map[v], (sx + vdx, sy + vdy))
+                        sprite = vertex_sprite_map[v]
+                        vert_sprite_draws.append((sprite, (int(sx + vdx - (sprite.size[0]/2)), int(sy + vdy - (sprite.size[1]/2)))))
             
     x_coords = [ s_coord[0] for s_coord, tile in tile_screen_coords ]
     y_coords = [ s_coord[1] for s_coord, tile in tile_screen_coords ]
@@ -67,25 +69,36 @@ def get_map_image(tile_map, sprite_structures=None):
     
     #print 'x: %d - %d\ny: %d - %d' % (min_x, max_x, min_y, max_y)
     
-    map_img_size = (max_x - min_x + tw, max_y - min_y + th)
+    map_img_size = (max_x - min_x + tw + x_offset, max_y - min_y + th + y_offset)
     
     map_img = Image.new('RGBA', map_img_size)
-    background_image = Image.open(os.path.join(IMG_DIR, 'background.png')).resize(map_img_size)
-    map_img.paste(background_image, (0,0))
+    
     for screen_coord, tile_img in tile_screen_coords:
         map_img.paste(tile_img, screen_coord, tile_img)
         
     for sprite_img, screen_loc in vert_sprite_draws:
         map_img.paste(sprite_img, screen_loc, sprite_img)
         
-    return map_img
+    
+    
+    screenshot = Image.new('RGBA', (int(map_img_size[0] * 1.3), int(map_img_size[1] * 1.3)))
+    background_image = Image.open(os.path.join(IMG_DIR, 'background.png')).resize(screenshot.size)
+    screenshot.paste(background_image, (0,0))
+    miw, mih = map_img_size
+    ssw, ssh = screenshot.size
+    
+    screenshot.paste(map_img, ((ssw-miw)/2, (ssh-mih)/2), map_img)
+    return screenshot
 
 def build_sprite(size, mask, color):
-    if mask.size != size:
-        mask = mask.resize(size)
+    isize = [ int(size_el) for size_el in size ]
+    
+    if mask.size != isize:
+        mask = mask.resize(isize)
         
-    color_img = Image.new('RGBA', size, color)
-    dst_img = Image.new('RGBA', size)
+    pil_color = tuple([ int(c * 255.0) for c in color ])
+    color_img = Image.new('RGBA', isize, pil_color)
+    dst_img = Image.new('RGBA', isize)
     dst_img.paste(color_img, (0,0), mask)
     return dst_img
 
@@ -95,7 +108,7 @@ SCALE_FACTORS = {model.SETTLEMENT:1.0, model.CITY:1.3}
 
 def render_game(game_state):
     board = game_state.game_board
-    colors = [ colorsys.hsv_to_rgb(float(idx)/len(game_state.players)) for idx in xrange(len(players)) ]
+    colors = [ colorsys.hsv_to_rgb(float(idx)/len(game_state.players), 1.0, 1.0) for idx in xrange(len(game_state.players)) ]
     
     
     settlement_size, city_size = [ tuple([SCALE_FACTORS[stype] * BASE_STRUCTURE_SIZE] * 2) for stype in [model.SETTLEMENT, model.CITY] ]
@@ -105,7 +118,7 @@ def render_game(game_state):
         set_sprite, city_sprite = build_sprite(settlement_size, settlement_mask, color), build_sprite(city_size, city_mask, color)
         on_board_structures = filter(lambda struct: struct.on_board, player.cities + player.settlements)
         for obs in on_board_structures:
-            sprite_structure_pairs.append( set_sprite if obs.type == model.SETTLEMENT else city_sprite, obs)
+            sprite_structure_pairs.append( (set_sprite if obs.type == model.SETTLEMENT else city_sprite, obs))
     
     
     board_image = get_map_image(board, sprite_structure_pairs)

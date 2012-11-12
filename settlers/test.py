@@ -1,27 +1,38 @@
-import settlers
-
+from settlers import settlers as sim
+from settlers.ai import player
 from settlers.game import board
-from settlers.graphics import draw_game as draw_map
-from settlers import settlers as simulator
+from settlers.graphics import draw_game
+import random as rnd
 
 
-def test_map():
-    my_map = board.build_map()
+class BasicAI(object):
     
-    #print my_map
-    
-    my_map_img = draw_map.get_map_image(my_map)
-    
-    my_map_img.show()
-    
+    def choose_initial_placement(self, structure_type, game_state, choice_set=None):
+        if choice_set:
+            return rnd.choice(choice_set)
+        else:
+            return rnd.choice(list(game_state.vertices))
+            
+            
+player.PlayerAI.register(BasicAI)
+
+
 def test_game():
-    pass
+    players = [ sim.Player(name, BasicAI()) for name in ('Mike', 'Tits', 'Bitch') ]
+    game_map = board.build_map()
+    game = sim.Game(players, game_map)
     
+    game.play()
+    
+    game_screenshot = draw_game.render_game(game)
+    game_screenshot.show()
+    
+    for p in players:
+        active_settlements = filter(lambda x: x.on_board, p.settlements)
+        print '%s has %d active settlements' % (p.name, len(active_settlements))
     
 def main():
-    test_map()
-    #sprite = generate_settlement_sprite(200, 200, (125, 40, 208))
-    #sprite.show()
+    test_game()
     
 if __name__ == '__main__':
     main()
