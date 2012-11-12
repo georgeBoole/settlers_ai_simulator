@@ -61,8 +61,17 @@ class Tile(object):
 
 class Vertex(object):
     
-    def __init__(self):
-        self.occupant = None
+    def __init__(self, tiles=None):
+        self.occupied = False
+        self.neighbors = None
+        self.tiles = tiles
+        
+    def set_neighbors(self, neighbors):
+        self.neighbors = set(neighbors)
+        
+    def set_tiles(self, tiles):
+        self.tiles = tiles
+        
     
 neighbor_coords = [
     (0,-1), (1,-1), (1,0), (0,1), (-1,1), (-1,0)
@@ -76,12 +85,17 @@ vmap = {
     've':( ('bottom', 'va'), ('bottom_left', 'vc') ),
     'vf':( ('bottom_left', 'vb'), ('top_left', 'vd') )
 }
-#NEIGHBOR_TO_COORDS = dict(zip(Tile.NEIGHBOR_DIRECTIONS, neighbor_coords))
     
 
 def _get_neighbor_coords(x,y):
     return filter(lambda neighbor_tile: neighbor_tile in resource_tile_coords, [ (x+dx, y+dy) for dx,dy in neighbor_coords ])
 
+
+def get_tiles_and_vertices(map):
+    tile_set = reduce(lambda a,b: a + b, [ xvalue.values() for xvalue in game_board.values() ])
+    vertex_set = set(reduce(lambda c,d: c + d, [t.vertices for t in tile_set]))
+    return tile_set, vertex_set
+    
 def build_map():
     tile_label_list_list = [ [TT] * TILE_QUANTITY[TT] for TT in TILE_QUANTITY.keys()]
     tile_label_list = [ tile_label for single_type_list in tile_label_list_list for tile_label in single_type_list ]
@@ -104,17 +118,8 @@ def build_map():
         
     tiles = reduce(lambda x, y: x + y, [ tile_map[tx].values() for tx in tile_map.keys() ])
     
-    #vertex_counter = 0
-    def watch_vertex():
-        #vertex_counter += 1
-        f = open('vertex.txt', 'a')
-        f.write('X')
-        f.close()
-        return Vertex()
-    vertex_memo = ddict(lambda: ddict(lambda: ddict(watch_vertex)))
+    vertex_memo = ddict(lambda: ddict(lambda: ddict(lambda: Vertex())))
     
-    
-    sorting_configs = list()
     for tile in tiles:
         
         vertices = list()
@@ -122,17 +127,35 @@ def build_map():
             buddies = vmap[vertex]
             final_list = [ (getattr(tile, n_name), v_name) for  n_name, v_name in buddies ]
             final_list.append((tile, vertex))
-            a, b, c = sorted_vertex_tiles = sorted( final_list, key=lambda x: x[1] )
+            a, b, c = sorted_vertex_tiles = [ t[0] for t in sorted( final_list, key=lambda x: x[1] ) ]
             actual_vertex = vertex_memo[a][b][c]
+            actual_vertex.set_tiles(sorted_vertex_tiles)
             vertices.append(actual_vertex)
             
         tile.set_vertices(vertices)
+    
+    vert_neigh_map = {
+        0: lambda t: [t.vb, t.vf, t.top.vf if t.top else t.top_left.vc if t.top_left else None],
+        1: lambda t: [t.va, t.vc, t.top.vc if t.top else t.top_right.va if t.top_right else None],
+        2: lambda t: [t.vb, t.vd, t.top_right.vd if t.top_right else t.bottom_right.vb if t.bottom_right else None],
+        3: lambda t: [t.ve, t.vc, t.bottom_right.ve if t.bottom_right else t.bottom.vc if t.bottom else None],
+        4: lambda t: [t.vf, t.vd, t.bottom_left.vd if t.bottom_left else t.bottom.vf if t.bottom else None],
+        5: lambda t: [t.va, t.ve, t.top_left.ve if t.top_left else t.bottom_left.va if t.bottom_left else None]
+    }
+    vertex_processed = dict()
+    
+    for tile in tiles:
         
-        
-    if tile_map[2][1].va == tile_map[1][1].vc:
-        print 'SUCCESS!!'
+        for vidx, vertex in enumerate(tile.vertices):
+            if vertex in vertex_processed:
+                continue
+            else:
+                neighbor_set = filter(lambda x: x, vert_neigh_map[vidx](tile))
+                vertex.set_neighbors(neighbor_set)
+                vertex_processed[vertex] = True
+                
             
-    print '\n'.join([ '%s\t%s\t%s\t%s' % sconfig for sconfig in sorting_configs ])
+            
     return tile_map
     
 def main():
