@@ -80,6 +80,15 @@ def generate_settlement_sprite(width, height, color):
     del draw
     return settle_sprite
     
+def generate_city_sprite(width, height, color):
+    points = [
+        (0, height),
+        (0, height/2),
+        (width/3, 0),
+        (2*width/3, height/2),
+        (width, height/2),
+        (width, height)
+    ]
     
 def render_game(game_state):
     board = game_state.game_board
