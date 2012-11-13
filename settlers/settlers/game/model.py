@@ -76,7 +76,7 @@ class Structure(object):
         
     def add_to_board(self, location):
         self.location = location
-        if not isinstance(self.location, Iterable):
+        if self.location and not isinstance(self.location, Iterable):
             self.location.set_occupier(self)
         self.on_board = True
         

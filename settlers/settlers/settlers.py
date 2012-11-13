@@ -207,43 +207,70 @@ class Game(object):
         offering_player.add_resources(demand)
         accepting_player.add_resources(offer)
         
-    def legal_settlement_locations(self):
+    def legal_settlement_locations(self, player):
         verts = self.vertices
-        legals = list()
+        all_legals = list()
         for vert in verts:
             if not vert.occupied and reduce(lambda a,b: a and b, [ not v.occupied if v else True for v in vert.neighbors]):
-                legals.append(vert)
-        return legals
+                all_legals.append(vert)
+        player_roads = filter(lambda v: v.on_board, player.roads)
+        free_road_vertices = set(filter(lambda b: b and not b.occupied, reduce(lambda i,j: i+j, [pr.location for pr in player_roads ])))
+        all_legal_settlement_vertices = set(all_legals)
+        
+        return tuple(free_road_vertices.intersection(all_legal_settlement_vertices))
+        
+    def road_overlap(self, road_locA, road_locB):
+        return reduce(lambda x,y: x and y, [ p in road_locB for p in road_locA ])
+        
+    def road_overlaps(self, test_road, existing_roads):
+        return reduce(lambda y,u: y or u, [ self.road_overlap(test_road, er) for er in existing_roads ])
         
     def legal_road_locations(self, player):
-        vertex_structures = player.settlements + player.cities
+        
+        all_roads = reduce(lambda a,b: a + b, [p.roads for p in self.players ])
+        on_roads = filter(lambda x: x.on_board, all_roads)
+        on_road_locations = [ on_r.location for on_r in on_roads ]
+        
+        road_anchor_points = player.settlements + player.cities
         
         legals = list()
-        #for vs in vertex_structures:
-            #v = vs.location
-            #for vn in v.neighbors:
-                #legals.append(vn)
-        for vert_struct in vertex_structures:
+        for vert_struct in road_anchor_points:
             loc = vert_struct.location
+            if not loc:
+                continue
             if loc.neighbors:
                 for ne in loc.neighbors:
-                    legals.append((loc, ne))
-        return legals
+                    if not reduce(lambda c,d: c or d, [self.road_overlap((loc, ne), rl) for rl in on_road_locations ]):
+                        legals.append((loc, ne))
+        for player_road in filter(lambda z: z.on_board, player.roads):
+            for endpoint in filter(lambda u: u, player_road.location):
+                neighbors = endpoint.neighbors
+                locs = filter(lambda r: not self.road_overlaps(r, on_road_locations), [ (endpoint, n) for n in neighbors ])
+                
+                if locs:
+                    legals.extend(locs) if isinstance(locs, Iterable) else legals.append(locs)
+                
+        return filter(lambda loc: len(loc) == 2 and loc[0] and loc[1] and loc[0] in loc[1].neighbors , legals)
         
     def buy_item(self, player, item):
         if item == model.SETTLEMENT:
-            location = player.brain.build_settlement(self.legal_settlement_locations(), self)
+            location = player.brain.build_settlement(self.legal_settlement_locations(player), self)
             player.build_structure(model.SETTLEMENT, location)
         elif item == model.CITY:
             settlement_locations = [ s.location for s in filter(lambda x: x.on_board, player.settlements) ]
             location = player.brain.build_city(settlement_locations, self)
-            if not location and settlement_locations:
-                location = rnd.choice(settlement_locations)
+            if not location:
+                city_cost = ([model.ORE] * 3) + ([model.WHEAT] * 2)
+                player.add_resources(city_cost)
+                return
             settlement = location.occupier
             player.remove_structure(model.SETTLEMENT, location)
             player.build_structure(model.CITY, location)
         elif item == model.ROAD:
-            pass
+            road_locations = self.legal_road_locations(player)
+            selected_location = player.brain.build_road(road_locations, self)
+            player.build_structure(model.ROAD, selected_location)
+            
             
         
     def play_game(self):
@@ -367,8 +394,12 @@ class Game(object):
         if max_army >= 3:
             victory_points[max_army_player] += 2
             
-            
-        
+        change_detected = False    
+        for p in self.players:
+            if self.victory_points[p] != victory_points[p]:
+                change_detected=True
+        if change_detected:
+            print 'Current Standings:\n\t%s' % '\n\t'.join([ '%s %d' % (p.name, vp) for p, vp in victory_points.iteritems() ])
         self.victory_points = victory_points
         
     def is_game_over(self):
