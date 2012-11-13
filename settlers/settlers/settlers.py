@@ -30,6 +30,9 @@ class Player(object):
         self.face_down_development_cards = list()
         self.face_up_development_cards = list()
         
+    def add_development_card(self, devo_card):
+        self.face_down_development_cards.append(devo_card)
+        
     def add_resources(self, resources):
         self.hand.extend(resources)
         
@@ -113,32 +116,35 @@ def find_longest_road(road_segments):
     return max([ _find_longest_road(rs, filter(lambda rem_road_seg: rem_road_seg != rs, road_segments)) for rs in road_segments ])
     
 def _find_longest_road(current_road, remaining_segments):
-    
-    vertices = reduce(lambda a,b: a + b, [cr_seg.location for cr_seg in current_road ])
-    endpoints = filter(lambda c: vertices.count(c) == 1, vertices)
-    
-    recursive_results = list()
-    for rem_seg in remaining_segments:
-        for vertex in rem_seg.location:
-            if vertex in endpoints:
-                recursive_results.append(current_road + [vertex], filter(lambda rrs: rrs != rem_seg, remaining_segments))
-    return max([ len(rec_res) for rec_res in recursive_results ])
+    return 4
+    #vertices = reduce(lambda a,b: a + b, [cr_seg.location for cr_seg in [current_road] ])
+    #endpoints = filter(lambda c: vertices.count(c) == 1, vertices)
+    #
+    #recursive_results = list()
+    #for rem_seg in remaining_segments:
+    #    for vertex in rem_seg.location:
+    #        if vertex in endpoints:
+    #            recursive_results.append(current_road + [vertex], filter(lambda rrs: rrs != rem_seg, remaining_segments))
+    #return max([ len(rec_res) for rec_res in recursive_results ])
 
 def is_illegal(vertex):
     occupation_status = [ vn.occupied for vn in vertex.neighbors ] + [vertex.occupied]
     any_occupied = reduce(lambda x,y: x or y, occupation_status)
     return any_occupied
-
+    
 class Game(object):
     
     def __init__(self, players, game_board):
         report('Creating a Game object')
         self.players = players
         self.tiles, self.vertices = gameboard.get_tiles_and_vertices(game_board)
-        
+        self.turns_completed = 0
         self.game_board = game_board
         report('Creating the bank')
         self.bank = Bank(model.BANK_SIZE)
+        
+        desert_tile = filter(lambda x: x.type == model.DESERT, self.tiles)
+        self.robber = model.Robber(desert_tile if desert_tile else rnd.choice(self.tiles))
         report('Initializing bookkeeping variables')
         self.victory_points = dict(zip(self.players, [0] * len(self.players)))
         self.longest_road = None
@@ -155,19 +161,158 @@ class Game(object):
         report('Beginning initial placement')
         self.initial_placement()
         report('Finished initial placement, beginning game')
-        #self.play_game()
+        self.play_game()
         
+    def steal_resource(self, thief, victim):
+        resource = rnd.choice(victim.hand)
+        victim.hand.remove(resource)
+        thief.hand.append(resource)
+        
+    def handle_production(self):
+        production_roll = roll()
+        if self.turns_completed < model.ROBBER_TURN_THRESHOLD:
+            while production_roll == 7:
+                production_roll = roll()
+        if production_roll == 7:
+            for player in self.players:
+                if len(player.hand) > model.MAX_HAND_SIZE:
+                    discarded_cards = player.brain.discard_half(player.hand, self)
+                    for dc in discarded_cards:
+                        player.hand.remove(dc)
+            (dst, vic) = self.active_player.brain.move_robber(game_state)
+            self.move_robber(dst, vic)
+        else:
+            for producing_tile in filter(lambda x: x.production == production_roll and self.robber.tile != x, self.tiles):
+                resource_produced = producing_tile.type
+                for producing_vertex in filter(lambda y: y, producing_tile.vertices):
+                    struct = producing_vertex.occupier
+                    if struct:
+                        qty = 1 if struct.type == model.SETTLEMENT else 2 if struct.type == model.CITY else 0
+                        if qty > 0:
+                            struct.owner.add_resources([resource_produced] * qty)
+                    
+    
+    def move_robber(self, dst_tile, victim):
+        self.robber.move_to(dst_tile)
+        self.steal_resource(self.active_player, victim)
+            
+    def process_trade(self, offering_player, accepting_player, offer, demand):
+        for of in offer:
+            offering_player.remove(of)
+        for de in demand:
+            accepting_player.remove(de)
+        offering_player.add_resources(demand)
+        accepting_player.add_resources(offer)
+        
+    def legal_settlement_locations(self):
+        verts = self.vertices
+        legals = filter(lambda x: not x.occupied and reduce(lambda a,b: a and b, [not v.occupied for v in verts]))
+        return legals
+        
+    def legal_road_locations(self, player):
+        vertex_structures = player.settlements + player.cities
+        
+        legals = list()
+        for vs in vertex_structures:
+            v = vs.location
+            for vn in v.neighbors:
+                legals.append(vn)
+        
+    def buy_item(self, player, item):
+        if item == model.SETTLEMENT:
+            location = player.brain.build_settlement(self.legal_settlement_locations(), self)
+            player.build_structure(model.SETTLEMENT, location)
+        elif item == model.CITY:
+            settlement_locations = [ s.location for s in filter(lambda x: x.on_board, player.settlements) ]
+            location = player.brain.build_city(settlement_locations, self)
+            settlement = location.occupier
+            player.remove_structure(settlement)
+            player.build_structure(model.CITY, location)
+        elif item == model.ROAD:
+            possible_locations = self.legal_road_locations(player)
+            
         
     def play_game(self):
-        
         active_player_index = 0
-        
+                    
         while not self.is_game_over():
-            active_player = self.turn_order[active_player_index % len(self.players)]
-            production_roll = roll()
-            self.handle_production(production_roll, active_player)
+            devo_played = False
+            active_p = self.turn_order[active_player_index % len(self.players)]
+            brain = active_p.brain
+            def try_devo_play():
+                if not devo_played and len(active_p.face_up_development_cards) > 0:
+                    devo_play = brain.play_development_card(active_p.face_up_development_cards, self)
+                    if devo_play != model.PASS_PRIORITY:
+                        devo_played = True
+                        self.play_development_card(devo_play)
             
-    
+            if model.KNIGHT in active_p.face_up_development_cards:
+                devo_played = brain.use_knight_pre_roll(self)
+                if devo_played:
+                    self.play_knight(active_p)
+            self.handle_production()
+            # now player can play devo, or trade
+            
+            
+            # TRADE PHASE
+            domestic_open = True
+            bank_open = True
+            while domestic_open or bank_open:
+                try_devo_play()
+                domestic_open = True
+                bank_open = True
+                domestic_trade = brain.offer_domestic_trade(self)
+                if domestic_trade != model.PASS_PRIORITY:
+                    offer, demand = domestic_trade
+                    for non_active_player in filter(lambda x: x != active_p, self.players):
+                        accepted = non_active_player.brain.consider_domestic_trade(active_p, offer, demand)
+                        if accepted:
+                            self.process_trade(active_p, non_active_player, offer, demand)
+                            break
+                else:
+                    domestic_open = False
+                
+                try_devo_play()
+                bank_trade = brain.bank_trade(self)
+                if bank_trade != model.PASS_PRIORITY:
+                    offer, demand = bank_trade
+                    self.bank.trade(active_p, offer, demand)
+                else:
+                    bank_open = False
+                
+            
+            # BUY PHASE
+            
+            done_buying = False
+            while not done_buying:
+                try_devo_play()
+                buyable_items = model.get_buyable_items(active_p.hand)
+                if not buyable_items or len(buyable_items) == 0:
+                    done_buying = True
+                    continue
+                purchase = brain.buy(buyable_items, self)
+                if purchase != model.PASS_PRIORITY:
+                    cost = model.COST[purchase]
+                    for resource, qty in cost:
+                        active_p.remove_resource(resource, max_qty=qty)
+                    self.buy_item(active_p, purchase)
+                else:
+                    try_devo_play()
+                    done_buying = True
+            
+            self.turns_completed += 1
+            print 'finished with turn %s' % self.turns_completed - 1
+        print 'done with the game, %s won' % self.winner
+            
+            
+    def play_knight(self):
+        self.active_player.face_down_development_cards.remove(model.KNIGHT)
+        self.active_player.face_up_development_cards.append(model.KNIGHT)
+        (new_tile, player_to_steal_from) = active_player.brain.move_robber(self)
+        self.move_robber(new_tile, player_to_steal_from)
+        
+    def play_development_card(self, development_card):
+        pass
         
     def update_victory_points(self):
         victory_points = dict()
@@ -176,13 +321,27 @@ class Game(object):
             total = 0
             for vp_structure in player.settlements + player.cities:
                 total += model.VICTORY_POINTS[vp_structure.type]
-            
+            total += player.face_up_development_cards.count(model.VICTORY_POINT_CARD)
+            victory_points[player] = total
         # determine longest road
         player_roads = sorted(zip(self.players, [ find_longest_road(p.roads) for p in self.players ]), key=lambda x: x[1])
         if filter(lambda pl_rd: pl_rd[1] >= 5, player_roads):
             player_with_longest_road = player_roads[-1][0]
             victory_points[player_with_longest_road] += 2
             
+        # determine largest army
+        max_army = -1
+        max_army_player = None
+        for player in self.players:
+            army = len(filter(lambda x: x == model.KNIGHT, player.face_up_development_cards))
+            if army > max_army:
+                max_army = army
+                max_army_player = player
+        if max_army >= 3:
+            victory_points[max_army_player] += 2
+            
+            
+        
         self.victory_points = victory_points
         
     def is_game_over(self):

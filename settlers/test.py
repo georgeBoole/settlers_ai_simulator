@@ -18,15 +18,14 @@ player.PlayerAI.register(BasicAI)
 
 
 def test_game():
-    players = [ sim.Player(name, BasicAI()) for name in ('Jace', 'Chandra', 'Nicol') ]
+    players = [ sim.Player(name, BasicAI()) for name in ('Jace', 'Chandra', 'Nicol', 'Tezzeret') ]
     game_map = board.build_map()
     game = sim.Game(players, game_map)
     
     game.play()
     
     game_screenshot = draw_game.render_game(game)
-    #game_screenshot.show()
-            
+    game_screenshot.show()
     
     
 def main():

@@ -63,6 +63,7 @@ class Vertex(object):
     
     def __init__(self, tiles=None):
         self.occupied = False
+        self.occupier = None
         self.neighbors = None
         self.tiles = tiles
         
@@ -71,6 +72,11 @@ class Vertex(object):
         
     def set_tiles(self, tiles):
         self.tiles = tiles
+        
+    def set_occupier(self, occupier):
+        if not self.occupied:
+            self.occupied = True
+        self.occupier = occupier
         
     def __str__(self):
         return 'Vertex %d, occupied: %s' % (id(self), str(self.occupied))
