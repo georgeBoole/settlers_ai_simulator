@@ -53,7 +53,6 @@ class Structure(object):
         self.on_board = False
         if not isinstance(self.location, Iterable):
             self.location.occupied = False
-        self.location = None
         
 def init_structure(owner, structure_type):
     return [Structure(owner, structure_type) for idx in xrange(QUANTITY[structure_type])]

@@ -1,7 +1,7 @@
 from game import model, board as gameboard
 import random as rnd
 
-from collections import defaultdict
+from collections import defaultdict, Iterable
 
 def report(msg):
     print msg
@@ -52,7 +52,7 @@ class Player(object):
     def build_structure(self, structure_type, location):
         available = filter(lambda x: not x.on_board, self.struct_map[structure_type])
         if available:
-            using = rnd.choice(available)
+            using = available.pop() if isinstance(available, Iterable) else available
             using.add_to_board(location)
             
     def remove_structure(self, structure_type, location=None):
@@ -124,12 +124,10 @@ def _find_longest_road(current_road, remaining_segments):
                 recursive_results.append(current_road + [vertex], filter(lambda rrs: rrs != rem_seg, remaining_segments))
     return max([ len(rec_res) for rec_res in recursive_results ])
 
-def valid_structure_location(vertex):
-    is_valid = not vertex.occupied
-    for nv in vertex.neighbors:
-        if nv.occupied:
-            return False
-    return is_valid
+def is_illegal(vertex):
+    occupation_status = [ vn.occupied for vn in vertex.neighbors ] + [vertex.occupied]
+    any_occupied = reduce(lambda x,y: x or y, occupation_status)
+    return any_occupied
 
 class Game(object):
     
@@ -202,21 +200,23 @@ class Game(object):
         placement_order = self.turn_order + [ to for to in reversed(self.turn_order) ]
         
         last_placement_location = dict()
+        legal_spots = list(self.vertices)
         for placing_player in placement_order:
-            # place settlement
-            location = placing_player.brain.choose_initial_placement(model.SETTLEMENT, self)
-            #print 'location: %s' % location
-            while not valid_structure_location(location):
-                #report('improper selection')
-                location = placing_player.brain.choose_initial_placement(model.SETTLEMENT, self)
-            report('%s is placing a settlement at location %s' % (placing_player.name, location))
+                
+            location = placing_player.brain.choose_initial_placement(model.SETTLEMENT, self, choice_set=legal_spots)
+            
+            legal_spots.remove(location)
+            for n in location.neighbors:
+                if n in legal_spots:
+                    legal_spots.remove(n)
+                    
             placing_player.build_structure(model.SETTLEMENT, location)
-            # place road
-            #print 'neighbors of location %d' % len(location.neighbors)
-            road_location = placing_player.brain.choose_initial_placement(model.ROAD, self, choice_set=([ (location, ln) for ln in location.neighbors ]))
+
+            road_location = placing_player.brain.choose_initial_placement(model.ROAD, self, choice_set=([ (location, ln) for ln in filter(lambda x: x, location.neighbors) ]))
             placing_player.build_structure(model.ROAD, road_location)
             
             last_placement_location[placing_player] = location
+            
             
         for player, last_location in last_placement_location.iteritems():
             for tile in filter(lambda x: x and x.type in model.RESOURCES, last_location.tiles):

@@ -95,7 +95,7 @@ def get_map_image(tile_map, sprite_structures=None, roads=None):
     
     for rd in roads:
         line_points = [ tuple([int(rvc) for rvc in road_vertex_coords[loc]]) for loc in rd[0] ]
-        print line_points
+        #print line_points
         draw.line(line_points, fill=pil_color(rd[1]), width=8)
     
     del draw
@@ -136,11 +136,11 @@ def render_game(game_state):
     sprite_structure_pairs = list()
     roads = list()
     for player, color in zip(game_state.players, colors):
-        print '%s is going to be the color %s this game' % (player.name, str(color))
+        #print '%s is going to be the color %s this game' % (player.name, str(color))
         set_sprite, city_sprite = build_sprite(settlement_size, settlement_mask, color), build_sprite(city_size, city_mask, color)
         on_board_structures = filter(lambda struct: struct.on_board, player.cities + player.settlements)
         on_board_roads = filter(lambda road: road.on_board, player.roads)
-        print '%s has %d structures and %d roads' % (player.name, len(on_board_structures), len(on_board_roads))
+        #print '%s has %d structures and %d roads' % (player.name, len(on_board_structures), len(on_board_roads))
         for obs in on_board_structures:
             sprite_structure_pairs.append( (set_sprite if obs.type == model.SETTLEMENT else city_sprite, obs))
         for obr in on_board_roads:

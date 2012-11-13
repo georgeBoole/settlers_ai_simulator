@@ -43,13 +43,13 @@ class Tile(object):
     
     # ASSUMING TOP NEIGHBOR FIRST REST CLOCKWISE    
     def set_neighbors(self, neighbors):
-        self.neighbors = neighbors if len(neighbors) == 6 else neighbors + [None] * int(6-len(neighbors))
+        self.neighbors = neighbors
         self.top, self.top_right, self.bottom_right, self.bottom, self.bottom_left, self.top_left = self.neighbors
         
         
     # ASSUMING TOP LEFT VERTEX FIRST REST CLOCKWISE
     def set_vertices(self, vertices):
-        self.vertices = vertices if len(vertices) == 6 else vertices + [None] * int(6-len(vertices))
+        self.vertices = vertices
         self.va, self.vb, self.vc, self.vd, self.ve, self.vf = self.vertices
             
     def __str__(self):
@@ -67,7 +67,7 @@ class Vertex(object):
         self.tiles = tiles
         
     def set_neighbors(self, neighbors):
-        self.neighbors = set(neighbors)
+        self.neighbors = neighbors
         
     def set_tiles(self, tiles):
         self.tiles = tiles
@@ -87,6 +87,15 @@ vmap = {
     'vd':( ('bottom_right', 'vf'), ('bottom', 'vb') ),
     've':( ('bottom', 'va'), ('bottom_left', 'vc') ),
     'vf':( ('bottom_left', 'vb'), ('top_left', 'vd') )
+}
+
+tmap = {
+    'va':('top_left', 'top'),
+    'vb':('top', 'top_right'),
+    'vc':('top_right','bottom_right'),
+    'vd':('bottom_right','bottom'),
+    've':('bottom', 'bottom_left'),
+    'vf':('bottom_left', 'top_left')
 }
     
 
@@ -109,34 +118,48 @@ def build_map():
     #vertex_memo = ddict(lambda: ddict(lambda: ddict(lambda: Vertex())))
     
     tile_map = ddict(dict)
+    tiles = list()
     for tile_x, tile_y in resource_tile_coords:
         new_tile_type = tile_label_list.pop()
         new_tile_production = prod_nums.pop() if not new_tile_type == DESERT else 0
-        tile_map[tile_x][tile_y] = Tile(new_tile_type, new_tile_production)
+        new_tile = Tile(new_tile_type, new_tile_production)
+        tile_map[tile_x][tile_y] = new_tile
+        tiles.append(new_tile)
         
     for tx, ty in resource_tile_coords:
-        neighbors = _get_neighbor_coords(tx, ty)
-        print 'for hex tile %d, %d neighbors are [%s]' % (tx, ty, ', '.join([str(nb) for nb in neighbors ]))
-        tile_map[tx][ty].set_neighbors([tile_map[nx][ny] if ny in tile_map[nx] else None for nx, ny in neighbors])
-            
-        
-    tiles = reduce(lambda x, y: x + y, [ tile_map[tx].values() for tx in tile_map.keys() ])
+        neighbor_coords = _get_neighbor_coords(tx, ty)
+        neighbors = [ tile_map[nx][ny] if (nx,ny) in resource_tile_coords else None for (nx,ny) in neighbor_coords ]
+        tile_map[tx][ty].set_neighbors(neighbors)
     
-    vertex_memo = ddict(lambda: ddict(lambda: ddict(lambda: Vertex())))
+    #vertex_memo = ddict(lambda: ddict(lambda: ddict(lambda: Vertex())))
     
     for tile in tiles:
         
         vertices = list()
-        for vertex in Tile.vertex_names:
-            buddies = vmap[vertex]
-            final_list = [ (getattr(tile, n_name), v_name) for  n_name, v_name in buddies ]
-            final_list.append((tile, vertex))
-            a, b, c = sorted_vertex_tiles = [ t[0] for t in sorted( final_list, key=lambda x: id(x) ) ]
-            actual_vertex = vertex_memo[a][b][c]
-            actual_vertex.set_tiles(sorted_vertex_tiles)
-            vertices.append(actual_vertex)
-            
+        for vertex_name in Tile.vertex_names:
+            # check if vertex exists under alias, if not make it
+            aliases = vmap[vertex_name]
+            found_aliased_vertex = None
+            other_tiles = list()
+            for neighbor_name, neighbor_vertex_name in aliases:
+                neighbor = getattr(tile, neighbor_name)
+                if not neighbor:
+                    continue
+                else:
+                    other_tiles.append(neighbor)
+                possible_vertex = getattr(neighbor, neighbor_vertex_name)
+                if possible_vertex:
+                    found_aliased_vertex = possible_vertex
+                    break
+            if found_aliased_vertex:
+                vertices.append(found_aliased_vertex)
+            else:
+                new_vertex = Vertex(tiles=[ other_tiles[x] if x < len(other_tiles) else None for x in xrange(3)])
+                vertices.append(new_vertex)
+                
         tile.set_vertices(vertices)
+        
+    
     
     vert_neigh_map = {
         0: lambda t: [t.vb, t.vf, t.top.vf if t.top else t.top_left.vc if t.top_left else None],
@@ -146,17 +169,17 @@ def build_map():
         4: lambda t: [t.vf, t.vd, t.bottom_left.vd if t.bottom_left else t.bottom.vf if t.bottom else None],
         5: lambda t: [t.va, t.ve, t.top_left.ve if t.top_left else t.bottom_left.va if t.bottom_left else None]
     }
-    vertex_processed = dict()
+    vertex_processed = set()
     
     for tile in tiles:
         
         for vidx, vertex in enumerate(tile.vertices):
             if vertex in vertex_processed:
                 continue
-            else:
-                neighbor_set = filter(lambda x: x, vert_neigh_map[vidx](tile))
+            elif vertex:
+                neighbor_set = vert_neigh_map[vidx](tile)
                 vertex.set_neighbors(neighbor_set)
-                vertex_processed[vertex] = True
+                vertex_processed.add(vertex)
                 
             
             
